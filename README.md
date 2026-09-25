@@ -2,11 +2,114 @@
 Use Case: Explainable Multimodal Deepfake Forensics & Provenance Tool
 Details & Purpose
 
+## Quick Start
+
+```bash
+git clone https://github.com/HarshitaRV/DeepFakes_Hackathon.git
+cd DeepFakes_Hackathon
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python scripts/run_hackathon_validation.py
+streamlit run app.py --server.headless true --server.port 8501
+```
+
+Then open:
+
+```text
+http://localhost:8501
+```
+
 Deepfakes have evolved from wholesale fabrications to hybrid manipulations — a real body paired with an AI-generated face, or authentic footage with altered audio. Binary "real/fake" classification no longer serves platforms, journalists, or everyday users well, because it hides where and how content was altered. This use case defines an explainable, multimodal deepfake forensics agent that detects manipulation across video and audio, localizes it (which frames, which time window), and corroborates its findings against media provenance signals (C2PA metadata, upload history, re-encoding artifacts, etc.) — producing output like:
 
 "Face manipulated in frames 140–190; audio altered from 0:18–0:24; no C2PA provenance chain found."
 
 The purpose is to move from a black-box authenticity score to a transparent, evidence-backed forensic report that a non-technical person can act on.
+
+## Local Setup and Run Guide
+
+This project is designed to run locally as a lightweight hackathon prototype. The app entry point is `app.py`, the dependency list is in `requirements.txt`, and the validation workflow is in `scripts/run_hackathon_validation.py`.
+
+### 1) Clone the repository
+
+```bash
+git clone https://github.com/HarshitaRV/DeepFakes_Hackathon.git
+cd DeepFakes_Hackathon
+```
+
+### 2) Create a virtual environment
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+On Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### 3) Install dependencies
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+The exact pinned package versions are in `requirements.txt` and were validated for the local demo environment.
+
+### 4) Generate synthetic validation media (optional)
+
+The repository already includes sample media under `test_data/`, but you can regenerate it at any time:
+
+```bash
+python scripts/generate_test_media.py
+```
+
+### 5) Run the automated validation checks
+
+```bash
+python scripts/run_hackathon_validation.py
+```
+
+This validation script checks that:
+- the synthetic data is generated successfully
+- the clean vs suspicious cases are evaluated correctly
+- the overall prototype passes the local test workflow
+
+### 6) Launch the app locally
+
+```bash
+streamlit run app.py --server.headless true --server.port 8501
+```
+
+Then open the app in a browser at:
+
+```text
+http://localhost:8501
+```
+
+### Quick start checklist
+
+```bash
+git clone https://github.com/HarshitaRV/DeepFakes_Hackathon.git
+cd DeepFakes_Hackathon
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+python scripts/run_hackathon_validation.py
+streamlit run app.py --server.headless true --server.port 8501
+```
+
+### Expected outcome
+
+- The validation script prints pass/fail checks for the clean and suspicious test cases.
+- The Streamlit app starts successfully and loads on localhost:8501.
+- The prototype is ready for local exploration, demoing, and iteration.
 
 1. Business Problem
 Deepfakes today are rarely 100% synthetic — they're composite manipulations (real footage + AI face swap + altered/cloned audio), which most legacy detectors aren't built to catch or explain.
