@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <style>
     body {
-      width: 320px;
+      width: 360px;
       font-family: -apple-system, sans-serif;
       padding: 12px;
       background: #0f1117;
       color: #e5e7eb;
     }
     h3 { margin: 0 0 10px; font-size: 15px; }
+    .sub { font-size: 11px; color: #9ca3af; margin: 0 0 10px; line-height: 1.4; }
     button {
       width: 100%;
       padding: 8px;
@@ -27,15 +28,19 @@
     #report {
       font-size: 12px;
       margin-top: 10px;
-      white-space: pre-wrap;
-      line-height: 1.4;
+      line-height: 1.45;
     }
+    .summary { margin-top: 8px; padding: 8px; background: #121826; border: 1px solid #2b374d; border-radius: 8px; }
+    .pill { display: inline-block; padding: 3px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 6px; }
+    .risk { background: rgba(248,113,113,0.18); color: #fecaca; }
+    .ok { background: rgba(34,197,94,0.18); color: #bbf7d0; }
     .seg { color: #fca5a5; }
   </style>
 </head>
 <body>
-  <h3>🔍 Deepfake Forensics</h3>
-  <button id="analyzeBtn">Analyze Video On Page</button>
+  <h3>🔍 Explainable Deepfake Forensics</h3>
+  <p class="sub">Localized video + audio manipulation review for suspicious media. This is an evidence tool, not an automatic verdict.</p>
+  <button id="analyzeBtn">Analyze video on page</button>
   <div id="status"></div>
   <div id="report"></div>
   <script src="popup.js"></script>

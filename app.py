@@ -1,82 +1,40 @@
 import os
-import json
 import tempfile
-from pathlib import Path
 
-import cv2
 import librosa
 import numpy as np
 import streamlit as st
 
 
-st.set_page_config(page_title="Deepfake Forensics Demo", page_icon="🧪")
-st.title("Explainable Media Forensics Demo")
-st.caption("Local hackathon prototype for suspicious media detection and forensic reporting")
+st.set_page_config(page_title="Audio Forensics Demo", page_icon="🎧")
+st.title("Audio Forensics Demo")
+st.caption("Audio-only local prototype for suspicious media detection and forensic reporting")
 
 
-def extract_basic_video_metadata(video_path: str):
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    duration = frame_count / fps if fps else 0
-    cap.release()
+def extract_basic_audio_metadata(audio_path: str):
+    try:
+        y, sr = librosa.load(audio_path, sr=None)
+    except Exception:
+        return {
+            "path": audio_path,
+            "kind": "audio",
+            "duration_seconds": 0,
+            "sample_rate": 0,
+            "channels": 0,
+            "source": "local upload",
+            "provenance": "No clear provenance chain detected",
+        }
+
+    duration = float(len(y)) / sr if sr else 0
+    channels = 1 if len(y.shape) == 1 else y.shape[1]
     return {
-        "path": video_path,
-        "frames": frame_count,
-        "fps": fps,
-        "width": width,
-        "height": height,
+        "path": audio_path,
+        "kind": "audio",
         "duration_seconds": round(duration, 2),
+        "sample_rate": int(sr),
+        "channels": int(channels),
         "source": "local upload",
         "provenance": "No clear provenance chain detected",
-    }
-
-
-def detect_video_anomalies(video_path: str):
-    cap = cv2.VideoCapture(video_path)
-    previous = None
-    diffs = []
-
-    while True:
-        ok, frame = cap.read()
-        if not ok:
-            break
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if previous is not None:
-            diff = np.mean(np.abs(gray.astype(np.float32) - previous.astype(np.float32)))
-            diffs.append(diff)
-        previous = gray
-
-    cap.release()
-
-    if not diffs:
-        return {"status": "No strong temporal anomalies detected", "suspicious_frames": []}
-
-    mean_diff = float(np.mean(diffs))
-    std_diff = float(np.std(diffs))
-    threshold = mean_diff + (1.5 * std_diff)
-    suspicious = [i for i, v in enumerate(diffs, start=1) if v > threshold]
-
-    if not suspicious:
-        return {"status": "No strong temporal anomalies detected", "suspicious_frames": []}
-
-    suspicious_ranges = []
-    start = suspicious[0]
-    prev = suspicious[0]
-    for current in suspicious[1:]:
-        if current - prev > 1:
-            suspicious_ranges.append((start, prev))
-            start = current
-        prev = current
-    suspicious_ranges.append((start, prev))
-
-    return {
-        "status": "Suspicious visual inconsistencies detected",
-        "suspicious_frames": suspicious_ranges,
-        "mean_diff": round(mean_diff, 4),
-        "threshold": round(threshold, 4),
     }
 
 
@@ -86,7 +44,8 @@ def detect_audio_anomalies(audio_path: str):
     except Exception:
         return {"status": "Audio could not be analyzed", "suspicious_windows": []}
 
-    energy = np.abs(y)
+    signal = y if len(y.shape) == 1 else y[:, 0]
+    energy = np.abs(signal)
     frame_size = max(1, len(energy) // 200)
     chunks = [energy[i:i + frame_size] for i in range(0, len(energy), frame_size)]
     chunk_magnitudes = [float(np.mean(np.abs(chunk))) for chunk in chunks if len(chunk) > 0]
@@ -125,19 +84,11 @@ def detect_audio_anomalies(audio_path: str):
     }
 
 
-def build_report(metadata, video_anomaly, audio_anomaly):
+def build_audio_report(metadata, audio_anomaly):
     lines = []
-    lines.append("Summary: The uploaded media was analyzed for suspicious visual and audio signals.")
+    lines.append("Summary: The uploaded audio was analyzed for suspicious signal anomalies.")
     lines.append(f"Duration: {metadata.get('duration_seconds', 0)} seconds")
-    lines.append(f"Resolution: {metadata.get('width', 0)}x{metadata.get('height', 0)}")
-
-    if video_anomaly["suspicious_frames"]:
-        frames = video_anomaly["suspicious_frames"]
-        first = frames[0]
-        last = frames[-1]
-        lines.append(f"Video suspicion: frames {first[0]}-{last[1]} were flagged as potentially inconsistent.")
-    else:
-        lines.append("Video suspicion: no strong temporal anomaly detected.")
+    lines.append(f"Sample rate: {metadata.get('sample_rate', 0)} Hz")
 
     if audio_anomaly["suspicious_windows"]:
         windows = audio_anomaly["suspicious_windows"]
@@ -152,36 +103,32 @@ def build_report(metadata, video_anomaly, audio_anomaly):
     return "\n".join(lines)
 
 
-uploaded = st.file_uploader("Upload a local video", type=["mp4", "mov", "avi", "mkv", "wav", "mp3"])
+uploaded = st.file_uploader("Upload a local audio file", type=["wav", "mp3", "m4a", "ogg"])
 
 if uploaded is not None:
-    temp_dir = tempfile.mkdtemp(prefix="deepfake_demo_")
+    temp_dir = tempfile.mkdtemp(prefix="audio_forensics_")
     save_path = os.path.join(temp_dir, uploaded.name)
     with open(save_path, "wb") as f:
         f.write(uploaded.getvalue())
 
     st.success(f"File saved locally: {uploaded.name}")
 
-    st.subheader("Basic media metadata")
-    metadata = extract_basic_video_metadata(save_path)
+    st.subheader("Basic audio metadata")
+    metadata = extract_basic_audio_metadata(save_path)
     st.json(metadata)
-
-    st.subheader("Video anomaly assessment")
-    video_anomaly = detect_video_anomalies(save_path)
-    st.json(video_anomaly)
 
     st.subheader("Audio anomaly assessment")
     audio_anomaly = detect_audio_anomalies(save_path)
     st.json(audio_anomaly)
 
     st.subheader("Plain-language forensic summary")
-    summary = build_report(metadata, video_anomaly, audio_anomaly)
+    summary = build_audio_report(metadata, audio_anomaly)
     st.write(summary)
 
 else:
-    st.info("Upload a sample media file to run the local analysis demo.")
+    st.info("Upload a sample audio file to run the local analysis demo.")
 
     st.markdown("### Demo notes")
-    st.markdown("- This is a lightweight local prototype for a hackathon.")
+    st.markdown("- This prototype is intentionally audio-only for the current hackathon scope.")
     st.markdown("- It does not make a definitive real/fake claim.")
-    st.markdown("- It highlights suspicious video/audio segments and recommends human review.")
+    st.markdown("- It highlights suspicious audio segments and recommends human review.")

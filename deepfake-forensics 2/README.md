@@ -1,49 +1,42 @@
-# Deepfake Forensics — Explainable Multimodal Manipulation Detector
+# Deepfake Forensics — prototype status
 
-Detects and localizes AI manipulation across video and audio, then corroborates
-findings with media provenance (C2PA). Ships as both a web app and a browser
-extension that analyzes video already playing on a page.
+This sub-project is a separate browser/video concept, but the main repo has now pivoted to an audio-first prototype for the current hackathon scope.
 
-## Structure
-```
-backend/    FastAPI service — frame scoring, mock audio + provenance, report generation
-frontend/   React + TypeScript + Recharts upload UI
-extension/  Chrome MV3 extension — captures frames from in-page <video> elements
-```
+## Current status
 
-## 1. Run the backend
+- The browser/video stack still exists in this folder as a separate prototype
+- The root project is now focused on audio-based anomaly analysis and local explanation
+- The goal is to prove the workflow before expanding back into multimodal video analysis
+
+## What is already working here
+
+- FastAPI service scaffolding for analysis requests
+- Frontend upload flow and timeline/report output
+- Extension-based frame capture for in-page video
+- Mock scoring pipeline and local report generation
+
+## What is still missing
+
+- Real deepfake detector for faces or audio
+- Real provenance verification
+- Accurate spatial localization and face detection
+- Human review/routing workflow
+- Benchmarking against real-world manipulated samples
+
+## Run locally
+
 ```bash
 cd backend
 pip install -r requirements.txt --break-system-packages
 uvicorn main:app --reload --port 8000
 ```
-Confirm it's up: `curl http://localhost:8000/health`
 
-## 2. Run the frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open the printed localhost URL, upload a video, get a timeline + report.
 
-## 3. Load the extension
-1. Go to `chrome://extensions`
-2. Enable Developer mode (top right)
-3. Click "Load unpacked" → select the `extension/` folder
-4. Open any page with a `<video>` element, click the extension icon, hit
-   "Analyze Video On Page"
+## Recommendation
 
-Note: cross-origin videos without CORS headers will taint the canvas capture
-(browser security, not a bug) — demo on your own test page or a self-hosted
-video for a live demo.
-
-## What's real vs. mocked right now
-- **Real**: frame extraction, artifact-variance scoring, timeline generation,
-  segment localization, full API + UI wiring, in-page video capture.
-- **Mocked (clearly labeled in code)**: the actual deepfake classifier
-  (`score_frame`), audio manipulation detection (`mock_audio_analysis`),
-  C2PA provenance check (`check_provenance`), and the LLM-based report
-  writer (`generate_report`). Each has a docstring noting exactly what real
-  service (HF/PyTorch model, Amazon Transcribe, C2PA lib, Amazon Bedrock)
-  it stands in for and how to wire it in.
+Treat this as an architectural prototype and a product-direction testbed. The root repo is the current “done now” path for audio-only analysis, while this folder remains the more ambitious multimodal expansion lane.

@@ -7,14 +7,22 @@ Run:
     uvicorn main:app --reload --port 8000
 """
 
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from __future__ import annotations
+
+import base64
+import os
+import uuid
+from typing import Any
+
 import cv2
 import numpy as np
-import uuid
-import os
-import base64
+import requests
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+HF_API_TOKEN = os.getenv("HF_API_TOKEN")
+HF_SUMMARY_MODEL_ID = os.getenv("HF_SUMMARY_MODEL_ID", "microsoft/Phi-3-mini-4k-instruct")
 
 app = FastAPI(title="Deepfake Forensics API")
 
@@ -26,20 +34,11 @@ app.add_middleware(
 )
 
 os.makedirs("uploads", exist_ok=True)
+RESULTS: dict[str, dict[str, Any]] = {}
 
-# In-memory "database" -> swap for DynamoDB later, fine for a demo
-RESULTS = {}
-
-
-# ---------------------------------------------------------------------------
-# Core scoring logic (shared by both upload + frame-capture flows)
-# ---------------------------------------------------------------------------
 
 def laplacian_score(gray_frame: np.ndarray) -> float:
-    """Crude manipulation-artifact proxy: high-frequency detail variance.
-    Stand-in for a real deepfake classifier (HF/PyTorch model) -- swap
-    `score_frame()` below for a real model call when you have one wired up.
-    """
+    """Artifact-variance proxy for a video deepfake detector."""
     return cv2.Laplacian(gray_frame, cv2.CV_64F).var()
 
 
@@ -48,7 +47,7 @@ def score_frame(gray_frame: np.ndarray) -> float:
 
 
 def normalize_to_confidence(raw_scores: list) -> list:
-    """z-score normalize raw artifact scores into a 0-1 'confidence' scale."""
+    """Convert raw artifact scores into a 0-1 confidence curve."""
     if not raw_scores:
         return []
     vals = [s["raw"] for s in raw_scores]
@@ -78,11 +77,7 @@ def extract_segments(timeline: list, threshold: float = 0.5, label: str = "face"
 
 
 def mock_audio_analysis(duration: float) -> list:
-    """Placeholder for Amazon Transcribe + audio-artifact detection.
-    Replace with a real call once you have AWS creds wired up:
-      - transcribe.start_transcription_job(...) for timestamps/text
-      - a separate audio-artifact model (pitch/timbre consistency) for anomalies
-    """
+    """Placeholder for audio-spoof detection; real version would use a voice-clone/splice model."""
     if duration < 5:
         return []
     start = round(duration * 0.3, 1)
@@ -96,38 +91,114 @@ def mock_audio_analysis(duration: float) -> list:
 
 
 def check_provenance(filepath: str) -> dict:
-    """Placeholder for C2PA Content Credentials check.
-    Real version: use the `c2pa` python package to read embedded manifests:
-        from c2pa import Reader
-        reader = Reader.from_file(filepath)
-        manifest = reader.get_active_manifest()
-    """
+    """Placeholder for C2PA Content Credentials validation."""
     return {
         "c2pa_found": False,
         "note": "No Content Credentials (C2PA) manifest detected in file metadata.",
     }
 
 
-def generate_report(video_segments: list, audio_segments: list, provenance: dict) -> str:
-    """Placeholder for Amazon Bedrock / LLM reasoning step.
-    Real version: feed this same structured JSON into a Bedrock/Claude prompt
-    like: "Given these detector outputs, write a plain-English forensic summary."
+def call_hf_text_generation(prompt: str, model_id: str | None = None) -> str:
+    """Example integration pattern for a Hugging Face text model.
+    Set HF_API_TOKEN and HF_SUMMARY_MODEL_ID to activate this path.
+    If missing credentials, the system gracefully falls back to the local heuristic report.
     """
+    if not HF_API_TOKEN or not model_id:
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "inputs": prompt,
+        "parameters": {"max_new_tokens": 180, "temperature": 0.2, "return_full_text": False},
+    }
+
+    try:
+        response = requests.post(
+            f"https://api-inference.huggingface.co/models/{model_id}",
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if isinstance(data, list) and data and isinstance(data[0], dict) and "generated_text" in data[0]:
+            return data[0]["generated_text"].strip()
+        if isinstance(data, dict) and "generated_text" in data:
+            return data["generated_text"].strip()
+        if isinstance(data, list) and data and isinstance(data[0], str):
+            return data[0].strip()
+    except Exception:
+        return ""
+
+    return ""
+
+
+def compute_analysis_summary(video_segments: list, audio_segments: list, provenance: dict, model_status: str) -> dict:
+    signal_count = len(video_segments) + len(audio_segments)
+    confidence = 0.28 + min(0.5, signal_count * 0.13)
+    if provenance.get("c2pa_found") is False:
+        confidence += 0.12
+    confidence = round(min(0.97, confidence), 2)
+
+    if signal_count == 0:
+        risk = "low"
+    elif confidence >= 0.7:
+        risk = "high"
+    elif confidence >= 0.45:
+        risk = "medium"
+    else:
+        risk = "low"
+
+    return {
+        "signal_count": signal_count,
+        "confidence": confidence,
+        "risk": risk,
+        "model_status": model_status,
+    }
+
+
+def generate_report(video_segments: list, audio_segments: list, provenance: dict) -> str:
+    """Local heuristic report, with optional Hugging Face text-generation enhancement."""
     lines = []
-    for s in video_segments:
-        lines.append(f"Face region shows manipulation artifacts from {s['start']}s to {s['end']}s.")
-    for s in audio_segments:
-        lines.append(f"Audio shows signs of alteration from {s['start']}s to {s['end']}s ({s['note']}).")
+    if video_segments:
+        segment_summary = ", ".join(
+            f"face manipulation likely affects {s['start']}s–{s['end']}s" for s in video_segments
+        )
+        lines.append(f"Video evidence: {segment_summary}.")
+    if audio_segments:
+        audio_summary = ", ".join(
+            f"audio anomaly from {s['start']}s–{s['end']}s ({s.get('note', 'suspicious signal')})"
+            for s in audio_segments
+        )
+        lines.append(f"Audio evidence: {audio_summary}.")
     if not provenance["c2pa_found"]:
-        lines.append("No verifiable content provenance (C2PA) was found, which reduces confidence in authenticity.")
+        lines.append("No verifiable content provenance (C2PA) was found, so evidence remains inconclusive without human corroboration.")
     if not lines:
         lines.append("No strong manipulation signals detected in this sample.")
-    return " ".join(lines)
+    lines.append("Recommended action: human review and corroboration with source metadata before making any public claim.")
+
+    base_report = " ".join(lines)
+    if HF_API_TOKEN and HF_SUMMARY_MODEL_ID:
+        prompt = (
+            "You are a forensic analyst. Write a short evidence-based summary for a deepfake investigation. "
+            f"Context: video_segments={video_segments}; audio_segments={audio_segments}; provenance={provenance}. "
+            "Do not state a definitive real/fake verdict; instead explain evidence, confidence, and the need for human review."
+        )
+        enhanced = call_hf_text_generation(prompt, HF_SUMMARY_MODEL_ID)
+        if enhanced:
+            return enhanced.strip()
+    return base_report
 
 
 def build_response(file_id: str, timeline: list, video_segments: list,
                     audio_segments: list, provenance: dict) -> dict:
+    model_status = "huggingface-inference" if HF_API_TOKEN and HF_SUMMARY_MODEL_ID else "heuristic-fallback"
     report = generate_report(video_segments, audio_segments, provenance)
+    analysis_summary = compute_analysis_summary(video_segments, audio_segments, provenance, model_status)
     result = {
         "file_id": file_id,
         "timeline": timeline,
@@ -135,14 +206,13 @@ def build_response(file_id: str, timeline: list, video_segments: list,
         "audio_segments": audio_segments,
         "provenance": provenance,
         "report": report,
+        "analysis_summary": analysis_summary,
+        "overall_risk": analysis_summary["risk"],
+        "model_status": model_status,
     }
     RESULTS[file_id] = result
     return result
 
-
-# ---------------------------------------------------------------------------
-# Flow 1: full video upload (web app)
-# ---------------------------------------------------------------------------
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
@@ -173,13 +243,8 @@ async def analyze(file: UploadFile = File(...)):
     video_segments = extract_segments(timeline, threshold=0.5, label="face")
     audio_segments = mock_audio_analysis(duration)
     provenance = check_provenance(path)
-
     return build_response(file_id, timeline, video_segments, audio_segments, provenance)
 
-
-# ---------------------------------------------------------------------------
-# Flow 2: sampled frames from the browser extension (base64 JPEGs)
-# ---------------------------------------------------------------------------
 
 class FramesPayload(BaseModel):
     frames: list
@@ -196,7 +261,7 @@ async def analyze_frames(payload: FramesPayload):
         if not f:
             continue
         try:
-            header, b64data = f.split(",", 1)
+            _, b64data = f.split(",", 1)
             img_bytes = base64.b64decode(b64data)
             arr = np.frombuffer(img_bytes, np.uint8)
             img = cv2.imdecode(arr, cv2.IMREAD_GRAYSCALE)
@@ -217,13 +282,8 @@ async def analyze_frames(payload: FramesPayload):
     video_segments = extract_segments(timeline, threshold=0.5, label="face")
     audio_segments = mock_audio_analysis(payload.duration)
     provenance = {"c2pa_found": False, "note": "Provenance check unavailable for in-page capture."}
-
     return build_response(file_id, timeline, video_segments, audio_segments, provenance)
 
-
-# ---------------------------------------------------------------------------
-# Retrieve a past result (for DynamoDB-style history, currently in-memory)
-# ---------------------------------------------------------------------------
 
 @app.get("/results/{file_id}")
 async def get_result(file_id: str):
@@ -232,4 +292,4 @@ async def get_result(file_id: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "model_status": "huggingface-pattern-ready" if HF_API_TOKEN else "heuristic-fallback"}
