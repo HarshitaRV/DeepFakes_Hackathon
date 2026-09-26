@@ -137,6 +137,29 @@ def call_hf_text_generation(prompt: str, model_id: str | None = None) -> str:
     return ""
 
 
+def generate_plain_summary(video_segments: list, audio_segments: list, provenance: dict) -> str:
+    """Create the short, demo-friendly sentence the product can show directly to users."""
+    if video_segments:
+        first = video_segments[0]
+        sentence = (
+            f"Face region shows manipulation artifacts from {first['start']}s to {first['end']}s."
+        )
+    elif audio_segments:
+        first = audio_segments[0]
+        sentence = (
+            f"Audio signal shows suspicious manipulation from {first['start']}s to {first['end']}s."
+        )
+    else:
+        sentence = "No strong manipulation artifacts were detected in the sampled timeline."
+
+    if provenance.get("c2pa_found"):
+        provenance_sentence = "Content provenance found."
+    else:
+        provenance_sentence = "No content provenance found."
+
+    return f"{sentence} {provenance_sentence}"
+
+
 def compute_analysis_summary(video_segments: list, audio_segments: list, provenance: dict, model_status: str) -> dict:
     signal_count = len(video_segments) + len(audio_segments)
     confidence = 0.28 + min(0.5, signal_count * 0.13)
@@ -199,11 +222,21 @@ def build_response(file_id: str, timeline: list, video_segments: list,
     model_status = "huggingface-inference" if HF_API_TOKEN and HF_SUMMARY_MODEL_ID else "heuristic-fallback"
     report = generate_report(video_segments, audio_segments, provenance)
     analysis_summary = compute_analysis_summary(video_segments, audio_segments, provenance, model_status)
+    flagged_ranges = [
+        {"kind": "video", "start": s["start"], "end": s["end"], "type": s.get("type", "face")} for s in video_segments
+    ] + [
+        {"kind": "audio", "start": s["start"], "end": s["end"], "type": s.get("type", "audio"), "note": s.get("note")} for s in audio_segments
+    ]
+    summary_sentence = generate_plain_summary(video_segments, audio_segments, provenance)
+    provenance_line = "Content provenance found." if provenance.get("c2pa_found") else "No content provenance found."
     result = {
         "file_id": file_id,
         "timeline": timeline,
         "video_segments": video_segments,
         "audio_segments": audio_segments,
+        "flagged_ranges": flagged_ranges,
+        "summary_sentence": summary_sentence,
+        "provenance_line": provenance_line,
         "provenance": provenance,
         "report": report,
         "analysis_summary": analysis_summary,

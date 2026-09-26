@@ -30,11 +30,22 @@ interface AnalysisSummary {
   model_status: string;
 }
 
+interface FlaggedRange {
+  kind: "video" | "audio";
+  start: number;
+  end: number;
+  type?: string;
+  note?: string;
+}
+
 interface AnalysisResult {
   file_id: string;
   timeline: TimelinePoint[];
   video_segments: Segment[];
   audio_segments: Segment[];
+  flagged_ranges: FlaggedRange[];
+  summary_sentence: string;
+  provenance_line: string;
   provenance: { c2pa_found: boolean; note: string };
   report: string;
   analysis_summary?: AnalysisSummary;
@@ -341,6 +352,30 @@ export default function App() {
                 )}
               </ul>
             </aside>
+
+            <section className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>Input → Output</h2>
+              <div className="report-box" style={{ fontWeight: 700, fontSize: "1rem" }}>
+                {result.summary_sentence}
+              </div>
+              <div className="status-line">{result.provenance_line}</div>
+            </section>
+
+            <section className="panel" style={{ gridColumn: "1 / -1" }}>
+              <h2>Flagged time ranges</h2>
+              <ul className="signal-list">
+                {result.flagged_ranges.length > 0 ? (
+                  result.flagged_ranges.map((segment, idx) => (
+                    <li key={`${segment.kind}-${idx}`} className={segment.kind === "video" ? "video" : "audio"}>
+                      {segment.kind === "video" ? "Face region" : "Audio"} suspicious: {segment.start}s – {segment.end}s
+                      {segment.note ? ` (${segment.note})` : ""}
+                    </li>
+                  ))
+                ) : (
+                  <li className="audio">No flagged ranges from this sample.</li>
+                )}
+              </ul>
+            </section>
 
             <section className="panel" style={{ gridColumn: "1 / -1" }}>
               <h2>Evidence report</h2>
