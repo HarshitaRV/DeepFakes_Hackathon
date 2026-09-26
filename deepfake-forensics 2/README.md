@@ -1,27 +1,35 @@
-# Deepfake Forensics — prototype status
+# Deepfake Forensics — current demo prototype
 
-This sub-project is a separate browser/video concept, but the main repo has now pivoted to an audio-first prototype for the current hackathon scope.
+This folder is the active browser/video prototype for the hackathon pitch.
 
-## Current status
+## What the current demo does
 
-- The browser/video stack still exists in this folder as a separate prototype
-- The root project is now focused on audio-based anomaly analysis and local explanation
-- The goal is to prove the workflow before expanding back into multimodal video analysis
+- Accepts a video upload
+- Extracts sampled frames over time
+- Scores each frame for visual artifact “weirdness” using a plain heuristic proxy
+- Normalizes those scores to a 0–1 confidence curve
+- Finds contiguous time ranges where the score spikes above a threshold
+- Shows a red-highlighted confidence chart
+- Lists the suspicious ranges in plain timestamps
+- Produces a short plain-English summary such as:
+  - “Face region shows manipulation artifacts from 4.2s to 9.8s. No content provenance found.”
+- Displays provenance status as found / not found
 
-## What is already working here
+## Current output contract
 
-- FastAPI service scaffolding for analysis requests
-- Frontend upload flow and timeline/report output
-- Extension-based frame capture for in-page video
-- Mock scoring pipeline and local report generation
+The app is built around this simple user-facing flow:
 
-## What is still missing
+Input → Output
 
-- Real deepfake detector for faces or audio
-- Real provenance verification
-- Accurate spatial localization and face detection
-- Human review/routing workflow
-- Benchmarking against real-world manipulated samples
+- Input: uploaded video or in-page captured frames
+- Output:
+  - chart of confidence over time
+  - red highlighted suspicious zones
+  - list of flagged start/end ranges
+  - plain-English summary sentence
+  - provenance result
+
+This is the core product narrative and should stay intentionally simple for the demo.
 
 ## Run locally
 
@@ -37,6 +45,19 @@ npm install
 npm run dev
 ```
 
-## Recommendation
+## What still needs to be replaced later
 
-Treat this as an architectural prototype and a product-direction testbed. The root repo is the current “done now” path for audio-only analysis, while this folder remains the more ambitious multimodal expansion lane.
+- real deepfake model instead of heuristic artifact scoring
+- real provenance verification instead of placeholder metadata checks
+- more accurate face localization and temporal segmentation
+- stronger audio detection pipeline
+- robust benchmark set and model calibration
+
+## Demo note
+
+The current prototype is designed to contrast clearly:
+
+- Real clip → quiet timeline, little/no risk signal
+- Fake clip → spikes, red detection zones, suspicious ranges, evidence summary
+
+That contrast is the whole pitch.

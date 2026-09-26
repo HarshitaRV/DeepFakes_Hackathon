@@ -1,73 +1,75 @@
 # DeepFakes_Hackathon
 
-## Project status
+## Current state
 
-This repo is currently focused on a lightweight audio-forensics prototype for a hackathon demo. The working direction is to analyze uploaded audio for suspicious discontinuities and present a plain-language forensic summary without pretending to make a definitive real/fake decision.
+This repo now contains two layers of work:
 
-The project is intentionally scoped to a local, explainable prototype rather than a production deepfake detector.
+1. The active demo prototype in `deepfake-forensics 2/` is a browser/video workflow built around upload + frame sampling + confidence timeline + flagged segments + plain-English summary.
+2. The root folder still includes supporting audio-analysis scripts and tests (`app.py`, `ml_pipeline.py`, `train_model.py`, etc.) that were used during the earlier audio-first exploration.
 
-## What is done
+The main product story now is the simpler demo flow:
 
-- Audio-only upload flow in app.py
-- Basic metadata extraction for uploaded audio files
-- Suspicious audio-window detection using signal magnitude heuristics
-- Plain-language forensic report generation
-- Synthetic clean/suspicious audio fixtures in test_data
-- Validation script + focused tests for the audio-only flow
-- Current repo cleanup to keep the project aligned with the simpler audio-first scope
+- Upload a video file or capture frames from a video already on a webpage
+- Sample frames over time
+- Score the frame-to-frame visual “weirdness” as a confidence curve
+- Highlight suspicious time windows above a threshold
+- Return a chart, flagged ranges, and one plain-English sentence explaining the evidence
+- Show whether provenance/content credentials were found
 
-## What still needs to be done
+This is intentionally a hackathon prototype, not a production-diagnostic system.
 
-- Resolve dependency compatibility for this environment before full local validation passes cleanly
-- Replace the heuristic audio detector with a real audio deepfake model or learned classifier
-- Add provenance / metadata validation for content credentials, file history, and edit trails
-- Expand the app to include a true review workflow and confidence/risk tiering
-- Add stronger benchmark coverage on real-world media, not just synthetic test clips
-- Optionally extend back to video/audio combined analysis once the audio foundation is solid
+## What is working now
 
-## Current local workflow
+- Video upload + backend analysis flow in `deepfake-forensics 2/backend/main.py`
+- Frame-based confidence timeline generation and segment extraction
+- Red-highlighted suspicious zones in the UI
+- Flagged time-range list with start/end timestamps
+- Short plain-English summary sentence
+- Provenance line indicating whether content credentials were found
+- Frontend experience in `deepfake-forensics 2/frontend/src/App.tsx`
+- Focused tests for the demo summary contract in `tests/test_demo_output.py`
 
-```bash
-cd DeepFakes_Hackathon
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-streamlit run app.py --server.headless true --server.port 8501
-```
+## Demo behavior
 
-Then open:
+For the pitch, the expected contrast is simple:
 
-```text
-http://localhost:8501
-```
+- Real clip: low, quiet confidence timeline; no meaningful flagged ranges
+- Fake clip: confidence curve spikes; red zones appear; flagged ranges show the suspicious seconds; summary sentence names exactly where the manipulation happens
 
-## Demo scope
-
-This prototype is designed to answer a simpler question:
-
-- Does this uploaded audio contain suspicious time windows that look inconsistent or manipulated?
-- Can the system explain those segments in plain English and route them for human review?
-
-It does not claim a final verdict on authenticity.
+This is the core demo story: upload video → get back exactly which seconds looked fake, in plain English.
 
 ## Repo structure
 
-- app.py: Streamlit audio-forensics prototype
-- scripts/generate_test_media.py: generates synthetic clean/suspicious audio samples
-- test_data: sample fixtures for local validation
-- requirements.txt: Python dependencies
-- docs: planning and product notes
-- deepfake-forensics 2: separate prototype area for a fuller browser/video concept
+- `app.py`: earlier audio prototype entry point
+- `ml_pipeline.py`: audio feature extraction and training support
+- `train_model.py`: lightweight audio model experimentation
+- `evaluate_model.py`: evaluation utilities
+- `deepfake-forensics 2/backend/main.py`: current upload + frame-analysis backend
+- `deepfake-forensics 2/frontend`: current browser demo frontend
+- `tests/`: validation and smoke tests
+- `docs/`: product, scope, and planning materials
+- `data/`: sample data and generated assets
 
-## Recommended next milestone
+## Run the current demo
 
-1. Stabilize the local Python environment and dependency versions
-2. Validate the audio pipeline on generated clean/suspicious samples
-3. Replace the heuristic detector with a real model or model proxy
-4. Add provenance + explainability pass
-5. Decide whether to keep the project audio-only or reintroduce video analysis as a second phase
+Backend:
+
+```bash
+cd "DeepFakes_Hackathon/deepfake-forensics 2/backend"
+pip install -r requirements.txt --break-system-packages
+uvicorn main:app --reload --port 8000
+```
+
+Frontend:
+
+```bash
+cd "DeepFakes_Hackathon/deepfake-forensics 2/frontend"
+npm install
+npm run dev
+```
+
+Then open the local frontend URL shown by Vite and upload a short clip.
 
 ## Important note
 
-This is a proof-of-concept for a hackathon, not a production trust system. The goal is to show the idea, the workflow, and the likely next engineering steps clearly.
+The point of this project is to show a believable explainable demo, not to pretend the backend is a production-grade detector. The current prototype is intentionally limited to heuristic scoring, timestamped suspicious windows, and provenance reporting for a clear hackathon pitch.
