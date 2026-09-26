@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Deepfake Forensics",
+  "version": "1.0",
+  "description": "Analyze the currently playing video on this page for signs of AI manipulation.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://localhost:8000/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
